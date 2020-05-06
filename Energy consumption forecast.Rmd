@@ -1,0 +1,371 @@
+---
+title: "Untitled"
+author: "kuaifang liang"
+date: "12/1/2019"
+output:
+  word_document: default
+  html_document: default
+---
+```{r}
+library(lattice)
+library(foreign)
+library(MASS)
+library(car)
+require(stats)
+require(stats4)
+library(KernSmooth)
+library(fastICA)
+library(cluster)
+library(leaps)
+library(mgcv)
+library(rpart)
+library(pan)
+library(mgcv)
+library(DAAG)
+library(TTR)
+library(tis)
+require(datasets)
+require(graphics)
+library(forecast)
+library(stats)
+library(TSA)
+library(timeSeries)
+library(fUnitRoots)
+library(fBasics)
+library(tseries)
+library(timsac)
+library(TTR)
+library(fpp)
+library(strucchange)
+library(vars)
+library(lmtest)
+library(dlnm)
+library(KFAS)
+library(FKF)
+#install.packages(vars)
+library(vars)
+library(strucchange)
+#install.packages("greybox")
+library(greybox)
+```
+
+
+```{r}
+#read data
+data=read.csv("22.csv",header = TRUE)
+attach(data)
+V1=data$Coal.Consumption.for.Electricity.Generation.and.Useful.Thermal.Output..Industrial.Sector
+V2=data$Petroleum.Consumption.for.Electricity.Generation.and.Useful.Thermal.Output..Commercial.Sector
+#convert data into time series
+a_ts<-ts(V1,start=1989,freq=12)
+b_ts<-ts(V2,start=1989,freq=12)
+t<-seq(1989,2018,length=length(a_ts))
+plot(a_ts,main="Coal.Consumption.for.Electricity.Generation.and.Useful.Thermal.Output..Industrial.Sector")
+plot(b_ts,main="Petroleum.Consumption.for.Electricity.Generation.and.Useful.Thermal.Output..Commercial.Sector")
+```
+
+(1)
+```{r}
+# Plot time series--Coal Consumption for Electricity Generation and Useful Thermal Output, Industrial Sector
+tsdisplay(a_ts,main="Coal Consumption in Industrial Sector")
+# Plot time series--Petroleum Consumption for Electricity Generation and Useful Thermal Output, Commercial Sector
+tsdisplay(b_ts,main="Petroleum Consumption in Commercial Sector")
+```
+Coal Consumption in Industrial Sector: ACF decays to 0 very slow, which means that the data may have strong time dependence. We cannot get much information from PACF since it is very random.
+Petroleum Consumption in Commercial Sector: We can know data has strong time dependence from ACF because it decays slowly and all time period has spike. However, we cannot get much information from PACF since it is very random.
+
+
+(2)
+```{r}
+# Fit an Arima model
+auto.arima(a_ts,xreg = t)
+# ARIMA(1,0,1)(2,0,0)[12]Drift--Coal Consumption in Industrial Sector
+a=Arima(a_ts,order = c(1,0,1), seasonal = c(2,0,0),xreg = t)
+summary(a)
+coeftest(a)
+plot(t,a$fitted,type="l")
+lines(a_ts,col="red")
+
+# ARIMA(1,0,2)(2,0,0)[12]Drift--Petroleum Consumption in Commercial Sector
+auto.arima(b_ts,xreg = t)
+b=Arima(b_ts,order = c(1,0,2), seasonal = c(2,0,0),xreg = t)
+summary(b)
+coeftest(b)
+plot(t,b$fitted,type="l")
+lines(b_ts,col="red")
+```
+For the coal consumption series, we use auto.arima to find that the model should be ARMA(1,1) with S-AR(2),S=12. The graph shows that the beginning of the data fit well but the end of data does not fit very well. But the coeffients are statistically significant.
+For the petroleum consumption series, the auto.arima shows that the model should be ARMA(1,2) with S-AR(2),S=12. The graph shows that the data are not perfectly fit but changing trend is smiliar to the orginal data.
+
+
+(3)
+```{r}
+# Fit a trend--Coal Consumption in Industrial Sector
+# Linear
+t1.1=lm(V1~t)
+summary(t1.1)
+# Linear-qudratic 
+t2=t^2
+t1.2=lm(V1~t+t2)
+summary(t1.2)
+
+AIC(t1.1,t1.2)
+BIC(t1.1,t1.2)
+# quadratic trend is the fittest for coal consumption in industrial sector.
+```
+After comparing two trend models, we choose Linear-qudratic as the most fitted trend for coal consumption.
+
+
+```{r}
+# Fit a trend--Coal Consumption in Industrial Sector
+# Linear
+t2.1=lm(V2~t)
+summary(t2.1)
+# Linear-qudratic 
+t2=t^2
+t2.2=lm(V2~t+t2)
+summary(t2.2)
+
+AIC(t2.1,t2.2)
+BIC(t2.1,t2.2)
+# log-quadratic-period trend is the fittest for petroleum consumption in commercial sector.
+```
+After comparing two models, we choose linear model for petroleum consumption since BIC of linear model is lower.
+
+
+```{r}
+#Fit a quadrtaic trend + seasonality model
+s1.1=tslm(a_ts~t+t2+season)
+summary(s1.1)
+acf(s1.1$res,lag=36)
+pacf(s1.1$res,lag=36)
+
+s2.1=tslm(b_ts~t+t2+season)
+summary(s2.1)
+acf(s2.1$res,lag=36)
+pacf(s2.1$res,lag=36)
+# The residuals + ACF and PACF suggest cycles.
+```
+For coal consumption, the seasonal factors are statistically significant in Feburary, April and May. For petroleum consumption, the seasonal factors are statistically significant and from ACF plot, we can also know that petroleum consumption has strong seasonality. But ACF and PACF are not show residuals are white noise yet, suggesting we may not include cycle.
+
+
+```{r}
+# fit model for coal consumption in industrial sector
+# Model: Trend + Cycles + Seasonality
+m1=Arima(a_ts,order=c(1,0,1),seasonal=list(order=c(2,0,0)),include.drift = T)
+summary(m1)
+coeftest(m1)
+
+# Look at the ACF and PACF
+acf(m1$residuals,lag=36)
+pacf(m1$residuals,lag=36)
+Box.test(m1$residuals)
+# Judging from acf and pacf graph, we find that the resiudals seem a like white noise.
+```
+ACF and PACF showed no spikes and box-test showed the residuals are white noise.
+
+
+```{r}
+# fit model for coal consumption in industrial sector
+# Model: Trend + Cycles + Seasonality
+auto.arima(b_ts)
+m2=Arima(b_ts,order=c(1,0,2),seasonal=list(order=c(2,0,0)),include.drift = T)
+
+acf(residuals(m2),lag=36)
+pacf(residuals(m2),lag=36)
+Box.test(m2$residuals)
+# Though the acf and pacf don't perform well, we find that the residuals is white noise by using box-test.
+```
+ACF and PACF showed some spikes but box-test still showed the residuals are white noise.
+
+(4)
+```{r}
+# Residuals plot
+plot(m1$residuals,ylim=c(-1000,1000))
+plot(m2$residuals,ylim=c(-1000,1000))
+
+# Fitted value plot
+plot(a_ts,ylab="consumption", xlab="Time", lwd=2, col='gray',type="l",main="Fitted value vs. real value--Coal")
+lines(fitted(m1),col="green")
+
+plot(b_ts,ylab="consumption", xlab="Time", lwd=2, col='gray',type="l",main="Fitted value vs. real value--Petroleum")
+lines(fitted(m2),col="red")
+```
+The two residuals plots show that the residuals fluctuate around 0 with little volatility. 
+For the fitted-value plot, it looks like the fitted-value are nearly matched with real value, which means our models are good fit for the data.
+
+(5)
+```{r}
+# Plot acf and pacf--Coal
+acf(m1$residuals,lag=36)
+pacf(m1$residuals,lag=36)
+
+# Plot acf and pacf--Petroleum
+acf(m2$residuals,lag=36)
+pacf(m2$residuals,lag=36)
+```
+For coal consumption:ACF and PACF showed no spikes and box-test showed the residuals are white noise.
+For petroleum consumption: ACF and PACF showed some spikes but box-test still showed the residuals are white noise.
+
+
+(6)
+```{r}
+# CUSUM plot--Coal
+plot(efp(m1$residuals~1, type='Rec-CUSUM'))
+
+# CUSUM plot-Petroleum
+plot(efp(m2$residuals~1, type='Rec-CUSUM'))
+
+# Standardized residuals are within boundary. Thus, our models perfrom well.
+```
+Both CUSUM test results are good and our residuals are relatively stable.
+
+(7)
+```{r}
+# Recursive residuals plot--Coal
+resm1=recresid(m1$res~1)
+plot(resm1,ylim=c(-600,600),main="Recursive residuals--Coal, Industrial Sector")
+
+#Recursive residuals plot--Petroleum
+resm2=recresid(m1$res~1)
+plot(resm2,ylim=c(-600,600),main="Recursive residuals--Petroleum, Commercial Sector")
+```
+Both recursive residuals look good.
+
+(8)
+```{r}
+# Diagnostic statistics of Coal, Industrial Sector
+summary(m1)
+coeftest(m1)
+summary(m2)
+coeftest(m2)
+```
+the coefficients of two Arima models are statistically significant.
+
+(9)
+```{r}
+m1_f=forecast(m1,h=12)
+plot(m1_f)
+m2_f=forecast(m2,h=12)
+plot(m2_f)
+```
+Two forecasts are basically fit the expectation through rough trends,seasonalities and cycles.
+
+(10)
+```{r,fig.width=8, fig.height=8}
+library(car)
+df =data.frame(a_ts, b_ts)
+VARselect(df, lag.max=10)
+var1 = VAR(df,2)
+S(var1)
+plot(var1)
+```
+From VAR model, we can see the coal consumption fit the petroleum consuption better and the residual of coal consumption is nearly covariance stationary. The residual of petroleum is not very stationary.
+
+(11)
+```{r}
+irf(var1)
+plot(irf(var1))
+```
+From IRF graphs, we can see coal consumption has an effect on petroluem consumption but petroleum consumption has little effect on coal consumption 
+
+(12)
+```{r}
+grangertest(a_ts, b_ts)
+grangertest(b_ts, a_ts)
+```
+From the Granger-Causality test for coal consumption, the test results show that we reject the hypothesis that coal consumption has no effect on petroleum consumption, meaning that coal consumption has a significant effect on petroleum.
+
+
+(13)
+```{r}
+var.predict = predict(object=var1, n.ahead=12)
+plot(var.predict)
+```
+This VAR model including only its own lagged terms and the lagged terms of another variable is too simple. Its prediction effect is not very good compared with the ARIMA model.
+
+14
+(a)
+```{r}
+# Recursive Backtest 12-step ahead
+
+# forecast 
+model_l = "forecast(m1,h = h,level=95)"
+model_h = "forecast(m2,h = h,level=95)"
+ourValue = "mean"
+
+# separation : training 288  test 72
+V12rec = ro(a_ts,h=12,origins = 61,call=model_l,value=ourValue,
+                     ci=F,co=T)
+V1rec = ro(a_ts,h=1,origins = 72,call=model_l,value=ourValue,
+                    ci=F,co=T)
+V12rol = ro(a_ts,h=12,origins = 61,call=model_l,value=ourValue,
+                   ci=T,co=T)
+V1rol = ro(a_ts,h=1,origins = 72,call=model_l,value=ourValue,
+                  ci=T,co=T)
+V22rec = ro(b_ts,h=12,origins = 61,call=model_h ,value=ourValue,
+                     ci=F,co=T)
+V2rec = ro(b_ts,h=1,origins = 72,call=model_h ,value=ourValue,
+                    ci=F,co=T)
+V22rol = ro(b_ts,h=12,origins = 61,call=model_h ,value=ourValue,
+                   ci=T,co=T)
+V2rol = ro(b_ts,h=1,origins = 72,call=model_h ,value=ourValue,
+                  ci=T,co=T)
+
+# MAPE over each step for recursive f12
+l_f12_MAPE_eachstep = apply(abs((V12rec$mean-V12rec$holdout)
+                                /V12rec$holdout),1,mean)
+l_f12_MAPE_eachiteration = apply(abs((V12rec$mean-V12rec$holdout)
+                                     /V12rec$holdout),2,mean)
+plot(l_f12_MAPE_eachstep, main='CoalRecursive 12-step MAPE each step')
+plot(l_f12_MAPE_eachiteration, main='Coal Recursive 12-step MAPE each iteration')
+
+
+h_f12_MAPE_eachstep = apply(abs((V22rec$mean-V22rec$holdout)
+                                /V22rec$holdout),1,mean)
+h_f12_MAPE_eachiteration = apply(abs((V22rec$mean-V22rec$holdout)
+                                     /V22rec$holdout),2,mean)
+plot(h_f12_MAPE_eachstep, main='Petroleum Recursive 12-step MAPE each step')
+plot(h_f12_MAPE_eachiteration, main='Petroleum Recursive 12-step MAPE each iteration')
+
+```
+
+(b)
+```{r}
+# Recursive Backtest 1-step ahead
+# APE over each iteration for recursive f1
+l_f1_recursive_APE_eachiteration = abs(V1rec$mean-V1rec$holdout)/V1rec$holdout
+l_f1_recursive_APE_eachiteration = t(l_f1_recursive_APE_eachiteration)
+plot(l_f1_recursive_APE_eachiteration, main='Coal Recursive 1-step APE each iteration')
+
+h_f1_recursive_APE_eachiteration = abs(V2rec$mean-V2rec$holdout)/V2rec$holdout
+h_f1_recursive_APE_eachiteration = t(h_f1_recursive_APE_eachiteration)
+plot(h_f1_recursive_APE_eachiteration, main='Petroleum Recursive 1-step APE each iteration')
+
+```
+
+(c)
+As can be seen from the two figures above, our model performs better in the shorter horizon because we find that MAPE on shorter horizon is shorter horizon than longer horizon on average.
+
+(d) 
+```{r}
+# Rolling Backtest 12-step ahead
+
+# forecast error over each iteration for rolling f12
+l_f12_rolling_FE_eachiteration = V12rol$mean-V12rol$holdout
+h_f12_rolling_FE_eachiteration = V22rol$mean-V22rol$holdout
+
+# forecast error over each interation for rolling f1
+l_f1_rolling_FE_eachiteration = V1rol$mean-V1rol$holdout
+l_f1_rolling_FE_eachiteration = t(l_f1_rolling_FE_eachiteration)
+plot(l_f1_rolling_FE_eachiteration)
+
+h_f1_rolling_FE_eachiteration = V2rol$mean-V2rol$holdout
+h_f1_rolling_FE_eachiteration = t(h_f1_rolling_FE_eachiteration)
+plot(h_f1_rolling_FE_eachiteration)
+```
+
+
+(e)
+We find that the errors found using a recursive backtesting scheme compared with the errors observed using a moving average backtesting scheme is almost the same.Therefore, the two prediction methods are not different for us.
+

@@ -1,0 +1,318 @@
+---
+title: "homework3"
+author: "kuaifang liang"
+date: "11/22/2019"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r,echo=FALSE}
+library(lattice)
+library(foreign)
+library(MASS)
+library(car)
+require(stats)
+require(stats4)
+library(KernSmooth)
+library(fastICA)
+library(cluster)
+library(leaps)
+library(mgcv)
+library(rpart)
+library(pan)
+library(mgcv)
+library(DAAG)
+library("TTR")
+library(tis)
+require("datasets")
+require(graphics)
+library("forecast")
+#install.packages("astsa")
+require(astsa)
+library(xtable)
+library(stats)
+library('ggplot2')
+```
+
+Problem I
+```{r,echo=FALSE}
+getwd()
+# Read in the data into a data file and attach names:
+a=read.table("a.csv")
+names(a)="agriculture"
+attach(a)
+# Convert data to time series format:
+a_ts<-ts(agriculture,start=2005,freq=4)
+t<-seq(2005,2017,length=length(a_ts))
+b=auto.arima(a_ts)
+summary(b)
+```
+
+```{r,echo=FALSE}
+# Time series plot
+plot(a_ts,xlim=c(2005,2017),main="time series plot",col='skyblue3',lwd=2)
+# Covariance stationary: constant mean and variance, k-period covariance dependent only on k. Through the graph ,we find that there is an increasing trend and non-stationary series because the mean and variance are not constant.
+```
+
+```{r,echo=FALSE}
+acf(a_ts)
+pacf(a_ts)
+# From the graph, we find that values of ACF and PACF are time dependent. There is a decreasing trend on acf value or pacf value.
+```
+
+```{r,echo=FALSE}
+# Linear fit
+m1 <- lm(a_ts~t)
+plot(a_ts,ylab="Gross agriculture production", xlab="Time", lwd=2, col='lightblue',xlim=c(2005,2017),main="Linear regression")
+lines(t,m1$fit,col="springgreen4",lwd=2)
+# Residuals plot:
+plot(m1$fitted.values,m1$res, ylab="Residuals",type='l',lwd=2,xlab="Fitted Value",col='skyblue3',main="residuals of linear regression")
+abline(h=0,col='red3',lwd=2)
+# Residuals histogram
+res = data.frame(seq(1,52,1), m1$residuals)
+ggplot(res, aes(x=m1$residuals))+
+    geom_histogram(aes(y=..density.., fill='#003366'), alpha=0.5, show.legend=FALSE) +
+    geom_density(alpha=0.3, color='#990033', fill='lightskyblue4')+
+    labs(x='Residuals of Model1')+ggtitle('Histogram of residuals')+theme(plot.title = element_text(hjust=0.5))
+# Statistics Summary
+summary(m1)
+# Time is significant in this model. But residuals of linear model do not perform well,because the residual fluctuation varies with time.
+```
+
+```{r,echo=FALSE}
+# Quadratic fit
+m2=lm(a_ts~t+I(t^2))
+plot(a_ts,ylab="Gross agriculture production", xlab="Time", lwd=2, col='cornsilk3',main='Quadratic regression')
+lines(t,m2$fit,col="gray25",lwd=2)
+# Residuals plot:
+plot(m2$fitted.values,m2$res, ylab="Residuals",type='l',lwd=2,xlab="Fitted Value",main="residuals of quadratic regression",col="skyblue4")
+abline(h=0,col='red3',lwd=2)
+# Residuals histogram
+res = data.frame(seq(1,52,1), m2$residuals)
+ggplot(res, aes(x=m2$residuals))+
+    geom_histogram(aes(y=..density.., fill='#003366'), alpha=0.5, show.legend=FALSE) +
+    geom_density(alpha=0.3, color='#990033', fill='lightskyblue4')+
+    labs(x='Residuals of Model2')+ggtitle('Histogram of residuals')+theme(plot.title = element_text(hjust=0.5))
+# Statistics Summary
+summary(m2)
+# Both time and the quadaratic term are not significant. Besides, residuals, whose fluactuation vary with time,are not normally distributed.
+```
+
+```{r,echo=FALSE}
+# Log-Linear fit
+m3=lm(log(a_ts)~t)
+plot(log(a_ts),ylab="Gross agriculture production", xlab="Time", lwd=2, col='salmon',main='Log-Linear regression')
+lines(t,m3$fit,col="gray26",lwd=2)
+# Residuals plot:
+plot(m3$fitted.values,m3$res, ylab="Residuals",xlab="Fitted Value",type='l',main="residuals of Log-linear regression",lwd=2,col="skyblue4",ylim=c(-2,2))
+abline(h=0,col='red3',lwd=2)
+# Residuals histogram
+res = data.frame(seq(1,52,1), m3$residuals)
+ggplot(res, aes(x=m3$residuals))+
+    geom_histogram(aes(y=..density.., fill='#003366'), alpha=0.5, show.legend=FALSE) +
+    geom_density(alpha=0.3, color='#990033', fill='lightskyblue4')+
+    labs(x='Residuals of Model3')+ggtitle('Histogram of residuals')+theme(plot.title = element_text(hjust=0.5))
+# Statistics Summary
+summary(m3)
+# Because the data is not constant, we can see intervals in the density plot. In general, residuals fluctuate aroud zero, which performs much better.
+```
+
+```{r,echo=FALSE}
+# Log-Quadratic fit
+t2=t^2
+lagriculture <- log(a_ts)
+plot(lagriculture,xlab="Year", ylab="Log(Gross agriculture production)",lwd=2,main="Log-Quadratic regression",col="indianred4")
+m4=lm(lagriculture~t+t2)
+lines(t,m4$fit,col="grey26",lwd=2)
+# Residuals plot:
+plot(m4$fitted.values,m4$res, ylab="Residuals",xlab="Fitted Value",type='l',main="residuals of Log-Quadratic regression",lwd=2,col="skyblue4",ylim=c(-4,4))
+abline(h=0,col='red3',lwd=2)
+# Residuals histogram
+res = data.frame(seq(1,52,1), m4$residuals)
+ggplot(res, aes(x=m4$residuals))+
+    geom_histogram(aes(y=..density.., fill='#003366'), alpha=0.5, show.legend=FALSE) +
+    geom_density(alpha=0.3, color='#990033', fill='lightskyblue4')+
+    labs(x='Residuals of Model4')+ggtitle('Histogram of residuals')+theme(plot.title = element_text(hjust=0.5))
+# Statistics Summary
+summary(m4)
+# Though the residuals fluctuation perform well, the variables are not significant at all.
+```
+
+```{r,echo=FALSE}
+# Log-Quadratic-Periodic fit
+sin.t<-sin(2*pi*t)
+cos.t<-cos(2*pi*t)
+plot(lagriculture,xlab="Year", ylab="Log(Gross agriculture production)",main="Log-Quadratic-Period regression",col="tomato2",lwd=2)
+m5=lm(lagriculture~t+t2+sin.t+cos.t)
+lines(t, m5$fit,col="darkgreen",lwd=2)
+# Residuals plot:
+plot(m5$fitted.values,m5$residuals, ylab="Residuals",xlab="Fitted Value",main="residuals of Log-Quadratic-Periodic regression",lwd=2,col="skyblue4")
+abline(h=0,col='red3',lwd=2)
+# Residuals histogram
+res = data.frame(seq(1,52,1), m5$residuals)
+ggplot(res, aes(x=m5$residuals))+
+    geom_histogram(aes(y=..density.., fill='#003366'), alpha=0.5, show.legend=FALSE) +
+    geom_density(alpha=0.3, color='#990033', fill='lightskyblue4')+
+    labs(x='Residuals of Model5')+ggtitle('Histogram of residuals')+theme(plot.title = element_text(hjust=0.5))
+# Statistics Summary
+summary(m5)
+# Though the trend looks much fitted, but the fluctuation of residuals and significance condition are worse off.
+```
+
+```{r,echo=FALSE}
+# Plot trends in above models at the same time
+plot(a_ts,xlim=c(2005,2017),main="time series plot",col='black',lwd=2)
+lines(t,m1$fit,col="seagreen1",lwd=2)
+lines(t,m2$fit,col="yellow2",lwd=2)
+lines(t,exp(m3$fit),col="cyan2",lwd=2)
+lines(t,exp(m4$fit),col="maroon2",lwd=2)
+lines(t,exp(m5$fit),col="hotpink",lwd=2)
+```
+
+```{r,echo=FALSE}
+# Compare AIC values
+AIC(m1,m2,m3,m4,m5)
+# Compare BIC values
+BIC(m1,m2,m3,m4,m5)
+# Model 3, a Log-Linear model, has the smallest AIC value and BIC value.
+```
+
+```{r,echo=FALSE}
+#Prediction with confidence interval and prediction interval
+tn=data.frame(t=seq(2018,2022))
+pred=predict(lm(lagriculture ~ t), tn, se.fit = TRUE)
+pred.plim = predict(lm(lagriculture~t),tn, level =0.95, interval="prediction")
+pred.clim = predict(lm(lagriculture~t), tn,level=0.95, interval="confidence")
+matplot(tn$t,cbind(pred.clim, pred.plim[,-1]),
+        lty=c(1,1,1,3,3), type="l", lwd=2, ylab="predicted y",xlab="Time")
+```
+
+Problem II
+```{r,echo=FALSE}
+# Contrust model with seasonal dummyies
+fit1=tslm(a_ts~season)
+summary(fit1)
+AIC(fit1)
+BIC(fit1)
+```
+
+```{r,echo=FALSE}
+# Plot the estimated seasonal factors
+fit=tslm(lagriculture~ season+0)
+S(fit)
+plot(fit$coef,type='l',ylab='Seasonal Factors', xlab="Season",lwd=2, main="Plot of Seasonal Factors")
+# All seasonal factors are significant.
+# In the case of keeping other variables constant, season1 increase the gross outpout of agriculture by 10792 billion yuan.
+# In the case of keeping other variables constant, season2 increase the gross outpout of agriculture by 26812 billion yuan.
+# In the case of keeping other variables constant, season3 increase the gross outpout of agriculture by 50087 billion yuan.
+# In the case of keeping other variables constant, season4 increase the gross outpout of agriculture by 75932 billion yuan.
+# Thus, season4 contributed the most to the total gross agriculture output. 
+```
+
+```{r,echo=FALSE}
+fit2=tslm(lagriculture ~ trend )
+summary(fit2)
+fit3=tslm(lagriculture ~ trend+ season)
+summary(fit3)
+# Plot seasonality
+plot(a_ts,main="Time Series Data: Seasonality",lwd=2,col="tomato")
+lines(fit1$fitted.values, col="springgreen4",lwd=1)
+
+# Plot trend
+plot(lagriculture,main="Time Series Data: Trend",lwd=2,col="tomato")
+lines(fit2$fitted.values, col="springgreen4",lwd=1)
+
+# Plot trend and seasonality
+plot(lagriculture,main="Time Series Data: Trend + Seasonality",lwd=2,col="tomato")
+lines(fit3$fitted.values, col="springgreen4",lwd=1)
+
+# Plot holt-winters model
+plot(HoltWinters(lagriculture),lwd=2)
+```
+
+```{r,echo=FALSE}
+# Plot the respective residuals vs. fitted values 
+plot(fit3$fitted.values,fit3$residuals, type='p')
+# Through the graph, we find that the relationship between residuals and fitted values is disorganized, which means residuals and predicted value are unrelated.
+# Plot residuals
+plot(fit3$residuals)
+# Plot fitted values
+plot(lagriculture,fit3$fitted.values)
+```
+
+```{r,echo=FALSE}
+# Summary statistics (model1)
+summary(fit1)
+# MSE(model1)
+MSE1=sum((residuals(fit1))^2)/length(lagriculture)
+# MAE(model1)
+MAE1=sum(abs(residuals(fit1)))/length(lagriculture)
+
+# Summary statistics (model2)
+summary(fit2)
+# MSE(model2)
+MSE2=sum((residuals(fit2))^2)/length(lagriculture)
+# MAE(model2)
+MAE2=sum(abs(residuals(fit2)))/length(lagriculture)
+
+# Summary statistics (model3)
+summary(fit3)
+# MSE(model3)
+MSE3=sum((residuals(fit3))^2)/length(lagriculture)
+# MAE(model3)
+MAE3=sum(abs(residuals(fit3)))/length(lagriculture)
+# Coefficients become much more significant and the adjusted R-squared become more close to 1, when we add both trend and seasonality. 
+```
+
+```{r,echo=FALSE}
+accuracy(fit1)
+accuracy(fit2)
+accuracy(fit3)
+# Compare MSE respectively
+print(MSE1)
+print(MSE2)
+print(MSE3)
+# Judging from the result, the full model has the smallest value of MSE.
+
+# Compare MAE respectively
+print(MAE1)
+print(MAE2)
+print(MAE3)
+# Judging from the result, the full model has the smallest value of MAE.
+```
+
+```{r,echo=FALSE}
+# Forecast 16 steps
+plot(forecast(fit1,h=16),main="Model 1: Forecas Seasonality",xlim=c(2018,2022))
+plot(forecast(fit2,h=16),main="Model 2: Forecast Trend",xlim=c(2018,2022))
+plot(forecast(fit3,h=16),main="Model 3: Forecast Trend + Seasonality",xlim=c(2018,2022))
+```
+
+```{r,echo=FALSE}
+# STL decomposition
+plot(stl(lagriculture,s.window = 'periodic'))
+composition=decompose(lagriculture)
+plot(composition)
+# when the seasonal fluctuations do not vary much with time, we use the additive method. Otherwise ,we use the multiplicative method.
+# As we can see in the graph, the seasonal fluctuations don't vary much with time. Thus, I choose to use addictive method.
+```
+
+```{r,echo=FALSE}
+# Adjusted fitted value
+fitted.adjusted=lagriculture-composition$seasonal
+plot(fitted.adjusted,lwd=2,col="lightcoral")
+at=lm(lagriculture~t)
+lines(t,at$fitted.values,col="lightblue4",lwd=2)
+```
+
+
+
+
+
+
+
+
+
+
+
